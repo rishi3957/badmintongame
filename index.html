@@ -1,0 +1,971 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>Badminton 3D Master - Landscape Broadcast Edition</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;800;900&family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+  
+  <!-- Three.js & Libraries via CDN -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/tween.js/18.6.4/tween.umd.js"></script>
+
+  <style>
+    :root {
+      --primary: #00ffcc;
+      --primary-glow: rgba(0, 255, 204, 0.4);
+      --secondary: #ff0055;
+      --secondary-glow: rgba(255, 0, 85, 0.5);
+      --accent: #ffcc00;
+      --bg-dark: #0a0d14;
+      --panel-bg: rgba(16, 22, 36, 0.85);
+      --panel-border: rgba(255, 255, 255, 0.15);
+      --font-main: 'Outfit', sans-serif;
+      --font-hud: 'Inter', sans-serif;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      user-select: none;
+      -webkit-user-select: none;
+      touch-action: none;
+    }
+
+    body, html {
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      background-color: var(--bg-dark);
+      font-family: var(--font-main);
+      color: #ffffff;
+    }
+
+    #webgl-container {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      z-index: 1;
+    }
+
+    /* Swipe Gesture Trail Canvas Overlay */
+    #swipe-canvas {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      z-index: 5;
+      pointer-events: none;
+    }
+
+    /* Portrait Rotation Warning Overlay */
+    #portrait-warning {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: #080c14;
+      z-index: 200;
+      display: none;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      text-align: center;
+      padding: 24px;
+      gap: 16px;
+    }
+
+    #portrait-warning.show {
+      display: flex;
+    }
+
+    .rotate-icon {
+      font-size: 3.5rem;
+      animation: rotatePhone 2s infinite ease-in-out;
+    }
+
+    @keyframes rotatePhone {
+      0% { transform: rotate(0deg); }
+      50% { transform: rotate(90deg); }
+      100% { transform: rotate(0deg); }
+    }
+
+    /* UI Overlay Layer */
+    .ui-layer {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      z-index: 10;
+      pointer-events: none;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      padding: 8px 16px;
+    }
+
+    .interactive {
+      pointer-events: auto;
+    }
+
+    .glass-panel {
+      background: var(--panel-bg);
+      backdrop-filter: blur(16px);
+      -webkit-backdrop-filter: blur(16px);
+      border: 1px solid var(--panel-border);
+      border-radius: 14px;
+      box-shadow: 0 12px 40px rgba(0, 0, 0, 0.5);
+    }
+
+    /* Top HUD Header */
+    .hud-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      width: 100%;
+      max-width: 780px;
+      margin: 0 auto;
+      padding: 6px 16px;
+    }
+
+    .scoreboard {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+    }
+
+    .player-card {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .player-avatar {
+      width: 32px;
+      height: 32px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: 800;
+      font-size: 0.85rem;
+      border: 2px solid;
+    }
+
+    .p1-avatar {
+      background: rgba(0, 255, 204, 0.2);
+      border-color: var(--primary);
+      color: var(--primary);
+    }
+
+    .p2-avatar {
+      background: rgba(255, 0, 85, 0.2);
+      border-color: var(--secondary);
+      color: var(--secondary);
+    }
+
+    .score-display {
+      font-size: 1.5rem;
+      font-weight: 900;
+      font-family: var(--font-hud);
+      line-height: 1;
+    }
+
+    .score-divider {
+      font-size: 1rem;
+      color: #4a5a70;
+    }
+
+    .hud-tools {
+      display: flex;
+      gap: 6px;
+    }
+
+    .btn-icon {
+      width: 34px;
+      height: 34px;
+      border-radius: 10px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: rgba(255, 255, 255, 0.08);
+      border: 1px solid rgba(255, 255, 255, 0.18);
+      color: #fff;
+      cursor: pointer;
+    }
+
+    .btn-icon svg {
+      width: 15px;
+      height: 15px;
+      fill: currentColor;
+    }
+
+    /* Feedback Text */
+    .hit-feedback {
+      position: absolute;
+      top: 24%;
+      left: 50%;
+      transform: translate(-50%, -50%) scale(0.5);
+      font-size: 2.2rem;
+      font-weight: 900;
+      font-style: italic;
+      text-transform: uppercase;
+      letter-spacing: 2px;
+      pointer-events: none;
+      opacity: 0;
+      transition: transform 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275), opacity 0.2s ease;
+      text-shadow: 0 0 25px rgba(0, 0, 0, 0.9);
+      z-index: 15;
+    }
+
+    .hit-feedback.perfect { color: #00ffcc; text-shadow: 0 0 30px rgba(0, 255, 204, 0.8); }
+    .hit-feedback.smash { color: #ff0055; font-size: 2.8rem; text-shadow: 0 0 40px rgba(255, 0, 85, 1); }
+    .hit-feedback.show { opacity: 1; transform: translate(-50%, -50%) scale(1.1); }
+
+    /* Top Mobile Control Guide Banner */
+    .swipe-guide-banner {
+      position: absolute;
+      top: 55px;
+      left: 50%;
+      transform: translateX(-50%);
+      display: flex;
+      gap: 10px;
+      background: rgba(0, 0, 0, 0.6);
+      padding: 4px 12px;
+      border-radius: 16px;
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      font-size: 0.7rem;
+      color: #cbd5e1;
+      backdrop-filter: blur(8px);
+    }
+
+    /* Mobile Controls Layout (Landscape Optimized) */
+    .controls-landscape-overlay {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-end;
+      width: 100%;
+      padding-bottom: 6px;
+    }
+
+    /* 360 Analog Virtual Joystick Wheel (Left Thumb) */
+    .joystick-wheel-container {
+      width: 110px;
+      height: 110px;
+      border-radius: 50%;
+      background: rgba(255, 255, 255, 0.08);
+      border: 2px solid rgba(0, 255, 204, 0.35);
+      position: relative;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      backdrop-filter: blur(12px);
+      box-shadow: 0 0 20px rgba(0, 255, 204, 0.15);
+      touch-action: none;
+    }
+
+    .joystick-wheel-inner {
+      width: 44px;
+      height: 44px;
+      border-radius: 50%;
+      background: radial-gradient(circle, #00ffcc 0%, #00b386 100%);
+      border: 2px solid #ffffff;
+      box-shadow: 0 0 15px var(--primary-glow);
+      position: absolute;
+      transition: transform 0.05s ease-out;
+      pointer-events: none;
+    }
+
+    .joystick-label {
+      position: absolute;
+      bottom: -20px;
+      font-size: 0.6rem;
+      font-weight: 800;
+      color: var(--primary);
+      letter-spacing: 1px;
+    }
+
+    /* Dedicated Shot Buttons Group (Right Thumb) */
+    .action-group {
+      display: flex;
+      gap: 10px;
+      align-items: flex-end;
+    }
+
+    .action-btn-secondary {
+      width: 54px;
+      height: 54px;
+      border-radius: 14px;
+      background: rgba(255, 255, 255, 0.12);
+      border: 1px solid rgba(255, 255, 255, 0.22);
+      color: #fff;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      backdrop-filter: blur(12px);
+    }
+
+    .action-btn-secondary:active {
+      transform: scale(0.9);
+      background: rgba(255, 255, 255, 0.3);
+    }
+
+    /* Dedicated Giant SMASH Button */
+    .btn-smash-giant {
+      width: 76px;
+      height: 76px;
+      border-radius: 50%;
+      background: linear-gradient(135deg, #ff0055 0%, #b3003b 100%);
+      border: 3px solid #ffffff;
+      color: #ffffff;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      font-weight: 900;
+      font-size: 0.9rem;
+      letter-spacing: 1px;
+      cursor: pointer;
+      box-shadow: 0 0 25px var(--secondary-glow);
+      touch-action: manipulation;
+      animation: pulseSmash 2s infinite alternate;
+    }
+
+    @keyframes pulseSmash {
+      0% { box-shadow: 0 0 15px var(--secondary-glow); }
+      100% { box-shadow: 0 0 35px var(--secondary-glow); }
+    }
+
+    .btn-smash-giant:active {
+      transform: scale(0.88);
+      filter: brightness(1.3);
+    }
+
+    .btn-title { font-size: 0.75rem; font-weight: 800; }
+    .btn-subtitle { font-size: 0.5rem; opacity: 0.8; }
+
+    /* Modals */
+    .modal-overlay {
+      position: absolute;
+      top: 0; left: 0;
+      width: 100%; height: 100%;
+      background: rgba(8, 12, 20, 0.9);
+      backdrop-filter: blur(20px);
+      z-index: 100;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      pointer-events: auto;
+    }
+
+    .modal-overlay.hidden { opacity: 0; pointer-events: none; }
+
+    .modal-card {
+      width: 90%;
+      max-width: 440px;
+      padding: 20px;
+      text-align: center;
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+      border: 1px solid rgba(255, 255, 255, 0.18);
+    }
+
+    .game-title {
+      font-size: 2rem;
+      font-weight: 900;
+      background: linear-gradient(135deg, #ffffff 0%, #00ffcc 50%, #ff0055 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+
+    .mode-select-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 8px;
+    }
+
+    .mode-card {
+      padding: 8px;
+      border-radius: 10px;
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      cursor: pointer;
+    }
+
+    .mode-card.active {
+      background: rgba(0, 255, 204, 0.15);
+      border-color: var(--primary);
+    }
+
+    .difficulty-selector { display: flex; justify-content: center; gap: 6px; }
+
+    .diff-btn {
+      padding: 6px 12px;
+      border-radius: 14px;
+      background: rgba(255, 255, 255, 0.06);
+      border: 1px solid rgba(255, 255, 255, 0.15);
+      color: #a0aec0;
+      font-size: 0.7rem;
+      font-weight: 700;
+    }
+
+    .diff-btn.active {
+      background: var(--primary);
+      color: #000;
+      border-color: var(--primary);
+    }
+
+    .btn-primary {
+      width: 100%;
+      padding: 12px;
+      border-radius: 10px;
+      border: none;
+      background: linear-gradient(135deg, #00ffcc 0%, #00b386 100%);
+      color: #051410;
+      font-size: 0.95rem;
+      font-weight: 800;
+    }
+  </style>
+</head>
+<body>
+
+  <!-- WebGL Canvas -->
+  <div id="webgl-container"></div>
+
+  <!-- Swipe Trail Canvas -->
+  <canvas id="swipe-canvas"></canvas>
+
+  <!-- Portrait Orientation Warning -->
+  <div id="portrait-warning">
+    <div class="rotate-icon">📱🔄</div>
+    <h2 style="font-size:1.4rem; font-weight:800; color:#00ffcc;">ROTATE YOUR DEVICE</h2>
+    <p style="font-size:0.9rem; color:#94a3b8;">Please switch to Landscape orientation for optimal dual-hand wheel movement & broadcast view!</p>
+  </div>
+
+  <!-- UI Overlay Layer -->
+  <div class="ui-layer">
+    
+    <!-- Top Scoreboard HUD -->
+    <div class="hud-header glass-panel interactive">
+      <div class="scoreboard">
+        <div class="player-card">
+          <div class="player-avatar p1-avatar">P1</div>
+          <div style="display:flex; flex-direction:column;">
+            <span style="font-size:0.6rem; color:#8a99ad;">YOU <span id="p1-serve-dot" style="display:inline-block; width:6px; height:6px; border-radius:50%; background:#ffcc00;"></span></span>
+            <span class="score-display" id="p1-score">0</span>
+          </div>
+        </div>
+
+        <span class="score-divider">VS</span>
+
+        <div class="player-card">
+          <div style="display:flex; flex-direction:column; text-align:right;">
+            <span style="font-size:0.6rem; color:#8a99ad;">AI BOT</span>
+            <span class="score-display" id="p2-score">0</span>
+          </div>
+          <div class="player-avatar p2-avatar">AI</div>
+        </div>
+      </div>
+
+      <div class="hud-tools">
+        <button class="btn-icon" id="btn-camera" title="Camera View">
+          <svg viewBox="0 0 24 24"><path d="M12 15a3 3 0 100-6 3 3 0 000 6z"/><path d="M9 2L7.17 4H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2h-3.17L15 2H9zm3 15c-2.76 0-5-2.24-5-5s2.24-5 5-5 5 2.24 5 5-2.24 5-5 5z"/></svg>
+        </button>
+        <button class="btn-icon" id="btn-audio" title="Sound Mute">
+          <svg viewBox="0 0 24 24"><path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02z"/></svg>
+        </button>
+        <button class="btn-icon" id="btn-pause" title="Pause">
+          <svg viewBox="0 0 24 24"><path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/></svg>
+        </button>
+      </div>
+    </div>
+
+    <!-- Top Mobile Control Guide Banner -->
+    <div class="swipe-guide-banner">
+      <span>🕹️ Left Hand: Move Wheel</span>
+      <span>|</span>
+      <span>👋 Right Hand: Swipe / Smash</span>
+    </div>
+
+    <!-- Hit Timing Feedback -->
+    <div class="hit-feedback" id="hit-feedback">PERFECT!</div>
+
+    <!-- Landscape Mobile Controls Overlay -->
+    <div class="controls-landscape-overlay">
+      
+      <!-- 360 Analog Virtual Joystick Wheel (Left Thumb) -->
+      <div class="joystick-wheel-container interactive" id="joystick-container">
+        <div class="joystick-wheel-inner" id="joystick-knob"></div>
+        <span class="joystick-label">MOVE WHEEL</span>
+      </div>
+
+      <!-- Dedicated Shot Action Buttons Group (Right Thumb) -->
+      <div class="action-group interactive">
+        <button class="action-btn-secondary" id="btn-drop">
+          <span class="btn-title" style="color:#ffcc00;">DROP</span>
+          <span class="btn-subtitle">SOFT</span>
+        </button>
+        <button class="action-btn-secondary" id="btn-lob">
+          <span class="btn-title" style="color:#00ffcc;">LOB</span>
+          <span class="btn-subtitle">HIGH</span>
+        </button>
+        <button class="btn-smash-giant" id="btn-smash-giant">
+          <span>⚡</span>
+          <span>SMASH</span>
+        </button>
+      </div>
+
+    </div>
+
+  </div>
+
+  <!-- Start / Game Over Modal -->
+  <div class="modal-overlay" id="main-modal">
+    <div class="modal-card glass-panel">
+      <div>
+        <h1 class="game-title" id="modal-title">BADMINTON 3D</h1>
+        <p style="font-size:0.8rem; color:#94a3b8;">Landscape Broadcast View: Use left thumb wheel to move on court, right thumb to smash & hit shots!</p>
+      </div>
+
+      <div>
+        <div style="font-size:0.65rem; font-weight:700; text-transform:uppercase; color:#64748b; margin-bottom:4px;">Game Mode</div>
+        <div class="mode-select-grid">
+          <div class="mode-card active" data-mode="pvp">
+            <span style="font-size:1.1rem;">🏆</span>
+            <span style="font-size:0.65rem; font-weight:700;">VS AI</span>
+          </div>
+          <div class="mode-card" data-mode="target">
+            <span style="font-size:1.1rem;">🎯</span>
+            <span style="font-size:0.65rem; font-weight:700;">TARGET</span>
+          </div>
+          <div class="mode-card" data-mode="rally">
+            <span style="font-size:1.1rem;">⚡</span>
+            <span style="font-size:0.65rem; font-weight:700;">RALLY</span>
+          </div>
+        </div>
+      </div>
+
+      <div id="diff-section">
+        <div style="font-size:0.65rem; font-weight:700; text-transform:uppercase; color:#64748b; margin-bottom:4px;">AI Difficulty</div>
+        <div class="difficulty-selector">
+          <button class="diff-btn" data-diff="easy">AMATEUR</button>
+          <button class="diff-btn active" data-diff="medium">CLUB PRO</button>
+          <button class="diff-btn" data-diff="hard">MASTER</button>
+        </div>
+      </div>
+
+      <button class="btn-primary" id="btn-start-game">START MATCH</button>
+    </div>
+  </div>
+
+  <!-- Game Logic & 3D Script -->
+  <script>
+    /* Sound Synthesizer */
+    class SoundEngine {
+      constructor() { this.ctx = null; this.enabled = true; }
+      init() {
+        if (!this.ctx) {
+          const AudioContext = window.AudioContext || window.webkitAudioContext;
+          this.ctx = new AudioContext();
+        }
+        if (this.ctx.state === 'suspended') this.ctx.resume();
+      }
+      playHit(type = 'normal') {
+        if (!this.enabled) return;
+        this.init();
+        const now = this.ctx.currentTime;
+        const osc = this.ctx.createOscillator();
+        const gain = this.ctx.createGain();
+        if (type === 'smash') {
+          osc.type = 'sawtooth'; osc.frequency.setValueAtTime(340, now);
+          osc.frequency.exponentialRampToValueAtTime(35, now + 0.15);
+          gain.gain.setValueAtTime(0.9, now); gain.gain.exponentialRampToValueAtTime(0.01, now + 0.15);
+        } else {
+          osc.type = 'triangle'; osc.frequency.setValueAtTime(390, now);
+          osc.frequency.exponentialRampToValueAtTime(130, now + 0.09);
+          gain.gain.setValueAtTime(0.5, now); gain.gain.exponentialRampToValueAtTime(0.01, now + 0.09);
+        }
+        osc.connect(gain); gain.connect(this.ctx.destination);
+        osc.start(now); osc.stop(now + 0.16);
+      }
+      playWhistle() {
+        if (!this.enabled) return;
+        this.init();
+        const now = this.ctx.currentTime;
+        const osc = this.ctx.createOscillator();
+        osc.frequency.setValueAtTime(2500, now);
+        const gain = this.ctx.createGain();
+        gain.gain.setValueAtTime(0.2, now); gain.gain.exponentialRampToValueAtTime(0.01, now + 0.3);
+        osc.connect(gain); gain.connect(this.ctx.destination);
+        osc.start(now); osc.stop(now + 0.3);
+      }
+    }
+    const sound = new SoundEngine();
+
+    const COURT_LENGTH = 13.4;
+    const COURT_WIDTH = 6.1;
+    const NET_HEIGHT = 1.55;
+
+    const state = {
+      mode: 'pvp', difficulty: 'medium',
+      p1Score: 0, p2Score: 0, rallyCount: 0,
+      servingPlayer: 1, inPlay: false, paused: false, cameraView: 0
+    };
+
+    /* Three.js Scene Setup */
+    const container = document.getElementById('webgl-container');
+    const scene = new THREE.Scene();
+    scene.background = new THREE.Color(0x080b12);
+    scene.fog = new THREE.FogExp2(0x080b12, 0.015);
+
+    // Initial Camera setup tuned for Landscape Widescreen
+    const camera = new THREE.PerspectiveCamera(58, window.innerWidth / window.innerHeight, 0.1, 100);
+    const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: "high-performance" });
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    renderer.shadowMap.enabled = true;
+    container.appendChild(renderer.domElement);
+
+    scene.add(new THREE.AmbientLight(0xffffff, 0.55));
+    const mainSun = new THREE.DirectionalLight(0xffffff, 1.0);
+    mainSun.position.set(8, 22, 10); mainSun.castShadow = true;
+    scene.add(mainSun);
+
+    /* High Quality Court Texture */
+    function createCourtTexture() {
+      const canvas = document.createElement('canvas');
+      canvas.width = 1024; canvas.height = 2048;
+      const ctx = canvas.getContext('2d');
+      ctx.fillStyle = '#0e5737'; ctx.fillRect(0, 0, canvas.width, canvas.height);
+      ctx.strokeStyle = '#ffffff'; ctx.lineWidth = 18;
+      ctx.strokeRect(60, 60, canvas.width - 120, canvas.height - 120);
+
+      // Short Service Lines
+      const centerY = canvas.height / 2;
+      ctx.beginPath(); ctx.moveTo(60, centerY); ctx.lineTo(canvas.width - 60, centerY); ctx.stroke();
+      const serviceDistY = (canvas.height - 120) * (1.98 / COURT_LENGTH);
+      ctx.beginPath();
+      ctx.moveTo(60, centerY - serviceDistY); ctx.lineTo(canvas.width - 60, centerY - serviceDistY);
+      ctx.moveTo(60, centerY + serviceDistY); ctx.lineTo(canvas.width - 60, centerY + serviceDistY);
+      ctx.stroke();
+
+      return new THREE.CanvasTexture(canvas);
+    }
+
+    const courtMesh = new THREE.Mesh(
+      new THREE.PlaneGeometry(COURT_WIDTH + 1.6, COURT_LENGTH + 1.6),
+      new THREE.MeshStandardMaterial({ map: createCourtTexture(), roughness: 0.35 })
+    );
+    courtMesh.rotation.x = -Math.PI / 2; courtMesh.receiveShadow = true;
+    scene.add(courtMesh);
+
+    // Surround Arena Floor
+    const floorMesh = new THREE.Mesh(
+      new THREE.PlaneGeometry(80, 80),
+      new THREE.MeshStandardMaterial({ color: 0x06080e, roughness: 0.85 })
+    );
+    floorMesh.rotation.x = -Math.PI / 2; floorMesh.position.y = -0.01;
+    scene.add(floorMesh);
+
+    /* Net Mesh */
+    function createNetMesh() {
+      const netGroup = new THREE.Group();
+      const postGeo = new THREE.CylinderGeometry(0.04, 0.04, NET_HEIGHT, 16);
+      const postMat = new THREE.MeshStandardMaterial({ color: 0x222530, metalness: 0.8 });
+      
+      const post1 = new THREE.Mesh(postGeo, postMat);
+      post1.position.set(-COURT_WIDTH / 2 - 0.1, NET_HEIGHT / 2, 0);
+      netGroup.add(post1);
+
+      const post2 = post1.clone();
+      post2.position.x = COURT_WIDTH / 2 + 0.1;
+      netGroup.add(post2);
+
+      const netCanvas = document.createElement('canvas');
+      netCanvas.width = 512; netCanvas.height = 128;
+      const nCtx = netCanvas.getContext('2d');
+      nCtx.fillStyle = 'rgba(10, 10, 10, 0.85)'; nCtx.fillRect(0, 0, 512, 128);
+      nCtx.fillStyle = '#ffffff'; nCtx.fillRect(0, 0, 512, 16);
+
+      const netTex = new THREE.CanvasTexture(netCanvas);
+      const netGeo = new THREE.PlaneGeometry(COURT_WIDTH + 0.2, 0.76);
+      const netMat = new THREE.MeshStandardMaterial({ map: netTex, transparent: true, side: THREE.DoubleSide });
+      const netPlane = new THREE.Mesh(netGeo, netMat);
+      netPlane.position.set(0, NET_HEIGHT - 0.38, 0);
+      netGroup.add(netPlane);
+
+      return netGroup;
+    }
+    scene.add(createNetMesh());
+
+    /* 3D Shuttlecock & Player Avatars */
+    function createShuttlecockModel() {
+      const g = new THREE.Group();
+      const cork = new THREE.Mesh(new THREE.SphereGeometry(0.05, 16, 16), new THREE.MeshStandardMaterial({ color: 0xffffff }));
+      g.add(cork);
+      const cone = new THREE.Mesh(new THREE.ConeGeometry(0.085, 0.14, 16, 1, true), new THREE.MeshStandardMaterial({ color: 0xf0f4f8, side: THREE.DoubleSide }));
+      cone.position.y = 0.07; g.add(cone);
+      g.scale.set(1.5, 1.5, 1.5);
+      return g;
+    }
+    const shuttleMesh = createShuttlecockModel();
+    scene.add(shuttleMesh);
+
+    const shadowMat = new THREE.MeshBasicMaterial({ color: 0x000000, transparent: true, opacity: 0.45 });
+    const shuttleShadow = new THREE.Mesh(new THREE.CircleGeometry(0.14, 16), shadowMat);
+    shuttleShadow.rotation.x = -Math.PI / 2; shuttleShadow.position.y = 0.01;
+    scene.add(shuttleShadow);
+
+    function createPlayerAvatar(isP1 = true) {
+      const g = new THREE.Group();
+      const c = isP1 ? 0x00ffcc : 0xff0055;
+      const torso = new THREE.Mesh(new THREE.CylinderGeometry(0.28, 0.2, 0.75, 16), new THREE.MeshStandardMaterial({ color: c }));
+      torso.position.y = 0.98; torso.castShadow = true; g.add(torso);
+      const head = new THREE.Mesh(new THREE.SphereGeometry(0.2, 16, 16), new THREE.MeshStandardMaterial({ color: 0xffdbac }));
+      head.position.y = 1.52; head.castShadow = true; g.add(head);
+
+      const armGroup = new THREE.Group();
+      armGroup.position.set(0.35, 1.25, 0);
+      const racket = new THREE.Mesh(new THREE.TorusGeometry(0.15, 0.014, 8, 24), new THREE.MeshStandardMaterial({ color: c, metalness: 0.8 }));
+      racket.position.set(0, -0.45, 0.1); racket.rotation.x = Math.PI / 2;
+      armGroup.add(racket);
+      g.add(armGroup); g.armGroup = armGroup;
+      return g;
+    }
+    const p1Mesh = createPlayerAvatar(true); p1Mesh.position.set(0, 0, 5.2); scene.add(p1Mesh);
+    const p2Mesh = createPlayerAvatar(false); p2Mesh.position.set(0, 0, -5.2); p2Mesh.rotation.y = Math.PI; scene.add(p2Mesh);
+
+    /* Shuttlecock Physics */
+    class ShuttlePhysics {
+      constructor() {
+        this.pos = new THREE.Vector3(0, 1.4, 4.5);
+        this.vel = new THREE.Vector3(0, 0, 0);
+        this.gravity = 9.81; this.dragCoeff = 0.11;
+      }
+      reset(x = 0, y = 1.4, z = 4.5) { this.pos.set(x, y, z); this.vel.set(0, 0, 0); }
+      serve(fromP1 = true, type = 'lob') {
+        const dirZ = fromP1 ? -1 : 1;
+        if (type === 'lob') this.vel.set((Math.random() - 0.5) * 1.5, 8.2, dirZ * 12.0);
+        else if (type === 'smash') this.vel.set((Math.random() - 0.5) * 2.0, -3.5, dirZ * 24.0);
+        else if (type === 'drop') this.vel.set((Math.random() - 0.5) * 0.8, 3.9, dirZ * 6.5);
+        else this.vel.set((Math.random() - 0.5) * 2.5, 2.4, dirZ * 15.0);
+      }
+      update(dt) {
+        if (!state.inPlay) return;
+        const speed = this.vel.length();
+        if (speed > 0.001) this.vel.add(this.vel.clone().normalize().multiplyScalar(-speed * speed * this.dragCoeff * dt));
+        this.vel.y -= this.gravity * dt;
+        this.pos.addScaledVector(this.vel, dt);
+        shuttleMesh.position.copy(this.pos);
+
+        shuttleShadow.position.x = this.pos.x;
+        shuttleShadow.position.z = this.pos.z;
+
+        if (this.pos.y <= 0.08) {
+          this.pos.y = 0.08; this.vel.set(0, 0, 0);
+          handlePointEnd(this.pos.z < 0 ? 1 : 2);
+        }
+      }
+    }
+    const physics = new ShuttlePhysics();
+
+    /* AI Opponent */
+    class BadmintonAI {
+      constructor() { this.targetPos = new THREE.Vector3(0, 0, -5.2); this.speed = 5.2; }
+      update(dt) {
+        if (!state.inPlay) return;
+        if (physics.vel.z < 0) {
+          this.targetPos.set(physics.pos.x, 0, -4.8);
+        }
+        p2Mesh.position.x = THREE.MathUtils.lerp(p2Mesh.position.x, this.targetPos.x, this.speed * dt);
+        if (physics.pos.z < 0 && p2Mesh.position.distanceTo(physics.pos) < 1.7 && physics.vel.z < 0) {
+          physics.serve(false, 'lob'); sound.playHit('lob');
+        }
+      }
+    }
+    const ai = new BadmintonAI();
+
+    /* 360° ANALOG VIRTUAL JOYSTICK WHEEL */
+    const joyContainer = document.getElementById('joystick-container');
+    const joyKnob = document.getElementById('joystick-knob');
+    const joystickVec = { x: 0, z: 0 };
+    let joyActive = false;
+
+    function handleJoyMove(clientX, clientY) {
+      const rect = joyContainer.getBoundingClientRect();
+      const centerX = rect.left + rect.width / 2;
+      const centerY = rect.top + rect.height / 2;
+
+      let dx = clientX - centerX;
+      let dy = clientY - centerY;
+      const maxRadius = rect.width / 2 - 8;
+      const dist = Math.sqrt(dx * dx + dy * dy);
+
+      if (dist > maxRadius) {
+        dx = (dx / dist) * maxRadius;
+        dy = (dy / dist) * maxRadius;
+      }
+
+      joyKnob.style.transform = `translate(${dx}px, ${dy}px)`;
+      joystickVec.x = dx / maxRadius;
+      joystickVec.z = dy / maxRadius;
+    }
+
+    function resetJoyKnob() {
+      joyActive = false;
+      joyKnob.style.transform = `translate(0px, 0px)`;
+      joystickVec.x = 0; joystickVec.z = 0;
+    }
+
+    joyContainer.addEventListener('pointerdown', (e) => {
+      joyActive = true; handleJoyMove(e.clientX, e.clientY);
+    });
+    window.addEventListener('pointermove', (e) => { if (joyActive) handleJoyMove(e.clientX, e.clientY); });
+    window.addEventListener('pointerup', resetJoyKnob);
+    window.addEventListener('pointercancel', resetJoyKnob);
+
+    function updatePlayerFromWheel(dt) {
+      const moveSpeed = 6.8;
+      if (joyActive) {
+        p1Mesh.position.x += joystickVec.x * moveSpeed * dt;
+        p1Mesh.position.z += joystickVec.z * moveSpeed * dt;
+      }
+      p1Mesh.position.x = THREE.MathUtils.clamp(p1Mesh.position.x, -COURT_WIDTH / 2 - 0.4, COURT_WIDTH / 2 + 0.4);
+      p1Mesh.position.z = THREE.MathUtils.clamp(p1Mesh.position.z, 0.5, COURT_LENGTH / 2 + 1.2);
+    }
+
+    /* Right Hand Swipe & Dedicated Buttons */
+    const swipeCanvas = document.getElementById('swipe-canvas');
+    swipeCanvas.width = window.innerWidth; swipeCanvas.height = window.innerHeight;
+    let swipeStart = { x: 0, y: 0, active: false };
+
+    window.addEventListener('pointerdown', (e) => {
+      if (e.target.closest('.interactive')) return;
+      if (!state.inPlay) { startRally(); return; }
+      swipeStart = { x: e.clientX, y: e.clientY, active: true };
+    });
+
+    window.addEventListener('pointerup', (e) => {
+      if (!swipeStart.active) return;
+      swipeStart.active = false;
+      const deltaY = e.clientY - swipeStart.y;
+      const dist = Math.sqrt(Math.pow(e.clientX - swipeStart.x, 2) + Math.pow(deltaY, 2));
+
+      if (dist < 15) triggerPlayerHit('auto');
+      else if (deltaY < -30) triggerPlayerHit('lob', 'SWIPE LOB!');
+      else if (deltaY > 30) triggerPlayerHit('smash', 'SWIPE SMASH!');
+    });
+
+    document.getElementById('btn-smash-giant').addEventListener('pointerdown', (e) => {
+      e.stopPropagation(); triggerPlayerHit('smash', 'POWER SMASH!');
+    });
+    document.getElementById('btn-lob').addEventListener('pointerdown', (e) => {
+      e.stopPropagation(); triggerPlayerHit('lob', 'HIGH LOB!');
+    });
+    document.getElementById('btn-drop').addEventListener('pointerdown', (e) => {
+      e.stopPropagation(); triggerPlayerHit('drop', 'SOFT DROP!');
+    });
+
+    function triggerPlayerHit(type = 'auto', label = 'PERFECT!') {
+      if (!state.inPlay) return;
+      const dist = p1Mesh.position.distanceTo(physics.pos);
+      if (dist < 2.2 && physics.pos.z > -0.5) {
+        physics.serve(true, type); sound.playHit(type);
+        showHitFeedback(label, type === 'smash' ? 'smash' : 'perfect');
+      }
+    }
+
+    function showHitFeedback(text, className) {
+      const el = document.getElementById('hit-feedback');
+      el.textContent = text; el.className = `hit-feedback ${className} show`;
+      setTimeout(() => el.classList.remove('show'), 650);
+    }
+
+    function startRally() {
+      state.inPlay = true; physics.reset(p1Mesh.position.x, 1.4, 4.5);
+      physics.serve(true, 'lob'); sound.playWhistle();
+    }
+
+    function handlePointEnd(winner) {
+      state.inPlay = false;
+      if (winner === 1) state.p1Score++; else state.p2Score++;
+      document.getElementById('p1-score').textContent = state.p1Score;
+      document.getElementById('p2-score').textContent = state.p2Score;
+      setTimeout(startRally, 1600);
+    }
+
+    /* Dynamic Camera Matrix tuned for Mobile Widescreen Landscape */
+    function updateLandscapeCamera() {
+      const aspect = window.innerWidth / window.innerHeight;
+
+      // Dynamically adjust FOV & Height based on aspect ratio
+      if (aspect > 1.2) {
+        // Landscape Mode: Higher elevation & wider angle framing P1 baseline & whole court
+        camera.fov = 56;
+        const targetCamPos = new THREE.Vector3(
+          p1Mesh.position.x * 0.3,
+          7.2, // Elevated Y position for complete court visibility
+          p1Mesh.position.z + 7.2 // Farther Z offset behind player
+        );
+        camera.position.lerp(targetCamPos, 0.08);
+        camera.lookAt(new THREE.Vector3(physics.pos.x * 0.2, 0.8, -1.8));
+      } else {
+        // Portrait Mode fallback
+        camera.fov = 68;
+        camera.position.set(0, 6.5, 11);
+        camera.lookAt(0, 1, 0);
+      }
+      camera.updateProjectionMatrix();
+    }
+
+    /* Orientation & Resize Handler */
+    function checkOrientation() {
+      const isPortrait = window.innerHeight > window.innerWidth;
+      const warn = document.getElementById('portrait-warning');
+      if (isPortrait) warn.classList.add('show'); else warn.classList.remove('show');
+
+      camera.aspect = window.innerWidth / window.innerHeight;
+      renderer.setSize(window.innerWidth, window.innerHeight);
+      updateLandscapeCamera();
+    }
+    window.addEventListener('resize', checkOrientation);
+    checkOrientation();
+
+    document.getElementById('btn-start-game').addEventListener('click', () => {
+      document.getElementById('main-modal').classList.add('hidden');
+      startRally();
+    });
+
+    document.getElementById('btn-camera').addEventListener('click', () => {
+      state.cameraView = (state.cameraView + 1) % 3;
+    });
+
+    /* Main Animation Loop */
+    const clock = new THREE.Clock();
+    function animate() {
+      requestAnimationFrame(animate);
+      const dt = Math.min(clock.getDelta(), 0.1);
+      if (!state.paused) {
+        updatePlayerFromWheel(dt);
+        physics.update(dt);
+        ai.update(dt);
+        updateLandscapeCamera();
+      }
+      renderer.render(scene, camera);
+    }
+    animate();
+  </script>
+</body>
+</html>
